@@ -1,0 +1,95 @@
+version: '3'
+services:
+  nginx-proxy:
+    image: nginxproxy/nginx-proxy:alpine
+    container_name: nginx-proxy
+    restart: always
+    privileged: true
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - TRUST_DOWNSTREAM_PROXY=false
+      - ENABLE_HTTP2=false
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - ./certs:/etc/nginx/certs
+      - ./vhost.d:/etc/nginx/vhost.d
+      - ./html:/usr/share/nginx/html
+
+  acme:
+    image: nginxproxy/acme-companion
+    container_name: speedtest-acme
+    restart: always
+    privileged: true
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    depends_on:
+      - nginx-proxy
+    environment:
+      - DEFAULT_EMAIL=${EMAIL}
+      - NGINX_PROXY_CONTAINER=nginx-proxy
+      - ACME_CA_URI=https://acme-v02.api.letsencrypt.org/directory
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./certs:/etc/nginx/certs
+      - ./vhost.d:/etc/nginx/vhost.d
+      - ./html:/usr/share/nginx/html
+      - ./acme:/etc/acme.sh
+
+  probe:
+    image: node:18-alpine
+    container_name: speedtest-probe
+    restart: always
+    # privileged: true <- No necesario y peligroso
+    # security_opt:
+    #   - seccomp:unconfined
+    #   - apparmor:unconfined
+    ulimits:
+      nofile: 262144
+    working_dir: /app
+    # Healthcheck para asegurar que el contenedor está realmente listo
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/ip"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # Instalamos dependencias solo si no existen, para evitar loop de reinicios si falla npm
+    command: [ "sh", "-c", "if [ ! -d node_modules ]; then npm install --omit=dev; fi && node server.js" ]
+    volumes:
+      - ./:/app
+    expose:
+      - "8080"
+    environment:
+      - PORT=8080
+      - NODE_ENV=production
+      - CENTRAL_URL=${CENTRAL_URL}
+      - PUBLIC_KEY_BASE64=${PUBLIC_KEY_BASE64}
+      - UV_THREADPOOL_SIZE=64
+      - GARBAGE_CHUNK_SIZE=4194304
+      - VIRTUAL_HOST=${DOMAIN}
+      - VIRTUAL_PORT=8080
+      - LETSENCRYPT_HOST=${DOMAIN}
+      - LETSENCRYPT_EMAIL=${EMAIL}
+      - AUTO_UPDATE=true
+
+  autoupdate:
+    image: node:18-alpine
+    container_name: speedtest-autoupdate
+    restart: always
+    working_dir: /app
+    command: [ "node", "autoupdate.js" ]
+    volumes:
+      - ./:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - CENTRAL_URL=${CENTRAL_URL}
+      - DOMAIN=${DOMAIN}
+      - SELF_HOST=${SELF_HOST:-}
+      - PROBE_CONTAINER=speedtest-probe
+      - AUTO_UPDATE_INTERVAL_MS=60000

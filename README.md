@@ -91,84 +91,52 @@ location / {
 
 ## Soporte
 Si necesitas ayuda, contacta al equipo de Speedtest.net.ar con el dominio del probe y los logs de `nginx-proxy`.
-## 🚀 Instalación 100% Automática
+## 🚀 Instalación
 
-Este kit está diseñado para que los ISPs puedan hostear un nodo de speedtest en **minutos**, sin necesidad de conocimientos técnicos avanzados.
-
-## ✅ ¿Qué incluye el instalador automático?
-
-El script `setup.sh` configura **TODO** lo necesario:
-
-✔️ **Docker & Docker Compose** (si no están instalados)
-✔️ **Certificado SSL/HTTPS** (Let's Encrypt, renovación automática)
-✔️ **CORS** (configurado en Nginx y en el servidor Node.js)
-✔️ **Servidor de Speedtest** (endpoints `/ip`, `/empty`, `/garbage`)
-✔️ **Proxy Nginx** (con headers de seguridad y caché)
-
-## 📦 Contenido del Kit
-
-```
-probe-kit/
-├── server.js          # Servidor Node.js con endpoints de speedtest
-├── package.json       # Dependencias
-├── Dockerfile         # Imagen Docker optimizada
-├── docker-compose.yml # Orquestación (probe + nginx + certbot)
-├── setup.sh           # Instalador automático
-└── nginx-template.conf# Plantilla de configuración (solo referencia)
-```
-
-## 🛠️ Instalación
+Este kit está diseñado para que los ISPs puedan hostear un nodo de speedtest en **minutos** usando Docker.
 
 ### Requisitos previos
-- Un servidor VPS/Dedicado con Ubuntu 20.04+ (o Debian)
+- Un servidor VPS/Dedicado con Ubuntu 20.04+, Debian, CentOS, etc.
+- **Docker** y **Docker Compose** instalados.
 - Un dominio apuntando a la IP del servidor (ej: `speedtest.mi-isp.com`)
 - Puertos 80 y 443 abiertos
 
 ### Pasos
 
-1. **Copiar el kit al servidor**
+1. **Clonar el repositorio**
    ```bash
-   scp -r probe-kit root@tu-servidor-ip:/root/
+   git clone https://github.com/leatfre/probe-speedtest.net.ar.git
+   cd probe-speedtest.net.ar
    ```
 
-2. **Ejecutar el instalador**
+2. **Configurar Variables**
+   Copia el archivo de ejemplo y edítalo con tus datos:
    ```bash
-   ssh root@tu-servidor-ip
-   cd /root/probe-kit
-   chmod +x setup.sh
-   sudo ./setup.sh
+   cp .env.example .env
+   nano .env
    ```
+   
+   Debes configurar:
+   - `DOMAIN`: Tu dominio (ej: `speedtest.mi-isp.com`)
+   - `EMAIL`: Tu email para el certificado SSL (ej: `admin@mi-isp.com`)
+   - `PUBLIC_KEY_BASE64`: (Opcional) Déjalo vacío, se descarga automáticamente.
 
-3. **Seguir las instrucciones**
-   - Ingresa el dominio cuando te lo pida
-   - El script se encarga del resto (SSL, Docker, Nginx, etc.)
+3. **Iniciar el Servidor**
+   ```bash
+   docker compose up -d
+   ```
+   
+   Esto descargará las imágenes, generará los certificados SSL automáticamente y levantará el servicio.
 
 4. **Verificar que funcione**
    ```bash
    curl https://tu-dominio.com/ip
-   # Deberías ver: {"ip":"1.2.3.4"}
+   # Deberías ver: {"ip":"1.2.3.4", ...}
    ```
 
 ## 🔐 Seguridad & CORS
 
-**CORS está preconfigurado** en dos capas:
-
-1. **Servidor Node.js** (`server.js`):
-   ```javascript
-   app.use(cors({
-       origin: '*',
-       methods: ['GET', 'POST', 'HEAD', 'OPTIONS']
-   }));
-   ```
-
-2. **Nginx** (`setup.sh` - líneas 86-88):
-   ```nginx
-   add_header 'Access-Control-Allow-Origin' '*' always;
-   add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
-   add_header 'Access-Control-Allow-Headers' '...' always;
-   ```
-
-**No se requiere configuración adicional.**
+**CORS está preconfigurado** para aceptar peticiones desde cualquier origen (`*`), lo cual es necesario para que el test de velocidad funcione desde el navegador del usuario. No se requiere configuración adicional.
 
 ## 📊 Endpoints del Probe
 
